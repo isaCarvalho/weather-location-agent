@@ -1,8 +1,9 @@
 import { Agent } from "@mastra/core/agent";
-import { cepFromAddressTool } from "../tools/cepTool";
-import { cityFromCepTool } from "../tools/cityTool";
-import { weatherFromCityTool } from "../tools/weatherTool";
+import { getAddressFromCepTool } from "../tools/cepTool";
+import { getWeatherFromCityCodeTool } from "../tools/weatherTool";
 import { createOllama } from "ollama-ai-provider-v2";
+import { wheaterWorkflow } from "../workflows/getWheaterWorkflow";
+import { getCityInformationTool } from "../tools/citiyTool";
 
 const ollama = createOllama({
     baseURL: "http://localhost:11434/api"
@@ -14,23 +15,20 @@ export const operatorAgent = new Agent({
     name: "operator-agent",
     model,
     instructions: `
-    You receive a user message with an address.
+    You receive a user message with a CEP (Brazilian zip code).
     Your job is:
 
-    1. Extract the address.
-    2. Convert it to a CEP (correios API).
-    3. Get city & state (BrasilAPI).
-    4. Get weather (BrasilAPI CPTEC).
-
-    Respond with a JSON containing:
-    - address
-    - cep
-    - city
-    - weather_summary
+    Use the cepTool to get the address from the CEP. The response will be a field called 
+    'localidade'. Pass this field to the getCityInformationTool to get the information on the city.
+    This tool will return a field called id. Pass this field to the weatherFromCityTool. 
+    The response from this tool is what you are going to respond to the user.
   `,
     tools: {
-        cepFromAddressTool, 
-        cityFromCepTool, 
-        weatherFromCityTool
+        getAddressFromCepTool,
+        getCityInformationTool,
+        getWeatherFromCityCodeTool
     },
+    workflows: {
+        wheaterWorkflow
+    }
 });

@@ -8,49 +8,56 @@ import { convertToModelMessages } from 'ai';
 import { registerApiRoute } from '@mastra/core/server';
 
 "use strict";
-const getCepFromAddress = async (address) => {
-  const response = await axios.get(`https://viacep.com.br/ws/${encodeURIComponent(address)}/json/`);
+const getAddressFromCep = async (cep) => {
+  const response = await axios.get(`https://viacep.com.br/ws/${encodeURIComponent(cep)}/json/`);
   return response.data;
 };
-const cepFromAddressTool = createTool({
+const getAddressFromCepTool = createTool({
   id: "get-cep-from-address",
-  description: "Get the CEP from an address",
+  description: "Get the address from the CEP",
   inputSchema: z.object({
-    address: z.string().describe("The address to get the CEP from")
+    cep: z.string().describe("CEP to get the address from")
   }),
   outputSchema: z.object({
-    cep: z.string().describe("The CEP found for the address")
-  }),
-  execute: async ({ context }) => {
-    const { address } = context;
-    return getCepFromAddress(address);
-  }
-});
-
-"use strict";
-const getCityFromCep = async (cep) => {
-  const res = await axios.get(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-  return res.data;
-};
-const cityFromCepTool = createTool({
-  id: "get-city-from-cep",
-  description: "Get the city from a CEP",
-  inputSchema: z.object({
-    cep: z.string().describe("The CEP to get the city from")
-  }),
-  outputSchema: z.object({
-    city: z.string().describe("The city found for the CEP")
+    cep: z.string(),
+    logradouro: z.string(),
+    complemento: z.string(),
+    unidade: z.string(),
+    bairro: z.string(),
+    localidade: z.string(),
+    uf: z.string(),
+    estado: z.string(),
+    regiao: z.string(),
+    ibge: z.string(),
+    gia: z.string(),
+    ddd: z.string(),
+    siafi: z.string()
   }),
   execute: async ({ context }) => {
     const { cep } = context;
-    return getCityFromCep(cep);
+    const response = await getAddressFromCep(cep);
+    return {
+      cep: response.cep,
+      logradouro: response.logradouro,
+      complemento: response.complemento,
+      unidade: response.unidade,
+      bairro: response.bairro,
+      localidade: response.localidade,
+      uf: response.uf,
+      estado: response.estado,
+      regiao: response.regiao,
+      ibge: response.ibge,
+      gia: response.gia,
+      ddd: response.ddd,
+      siafi: response.siafi
+    };
   }
 });
 
 "use strict";
 async function getWeatherFromCity(city) {
-  const cleanCity = city.replace(/\s+/g, "");
-  const url = `https://brasilapi.com.br/api/cptec/v1/clima/previsao/${cleanCity}`;
+  const url = `https://brasilapi.com.br/api/cptec/v1/clima/previsao/${encodeURIComponent(city)}`;
+  console.log("================= URL =================", url);
   const res = await axios.get(url);
   return res.data;
 }
@@ -58,20 +65,50 @@ const weatherFromCityTool = createTool$1({
   id: "get-weather-from-city",
   description: "Get the weather from a city",
   inputSchema: z.object({
-    city: z.string().describe("The city to get the weather from")
+    localidade: z.string()
   }),
   outputSchema: z.object({
-    weather: z.string().describe("The weather found for the city")
+    weather_summary: z.string().describe("The weather found for the city")
   }),
   execute: async ({ context }) => {
-    const { city } = context;
-    return getWeatherFromCity(city);
+    const { localidade: city } = context;
+    const response = await getWeatherFromCity(city);
+    return {
+      weather_summary: response
+    };
+  }
+});
+
+"use strict";
+const getCityInformation = async (cityName) => {
+  const response = await axios.get(`https://brasilapi.com.br/api/cptec/v1/cidade/${encodeURIComponent(cityName)}`);
+  return response.data;
+};
+const getCityInformationTool = createTool({
+  id: "get-city-information",
+  description: "Get the city code, name and state",
+  inputSchema: z.object({
+    cityName: z.string()
+  }),
+  outputSchema: z.object({
+    name: z.string(),
+    id: z.string(),
+    state: z.string()
+  }),
+  execute: async ({ context }) => {
+    const { cityName } = context;
+    const response = await getCityInformation(cityName);
+    return {
+      name: response.nome,
+      id: response.id,
+      state: response.estado
+    };
   }
 });
 
 "use strict";
 const ollama = createOllama({
-  baseURL: "http://localhost:11434"
+  baseURL: "http://localhost:11434/api"
 });
 const model = ollama("mistral");
 const operatorAgent = new Agent({
@@ -81,27 +118,22 @@ const operatorAgent = new Agent({
     You receive a user message with an address.
     Your job is:
 
-    1. Extract the address.
-    2. Convert it to a CEP (correios API).
-    3. Get city & state (BrasilAPI).
-    4. Get weather (BrasilAPI CPTEC).
-    5. Based on the weather + city, pick the best Brazilian operator:
-        - Claro \u2192 Melhor em capitais, \xF3timo 4G/5G.
-        - Vivo \u2192 Melhor cobertura em clima inst\xE1vel e chuva.
-        - TIM \u2192 Boa cobertura em cidades pequenas e interior.
+    1. Get the address from the CEP passed on the input
+    2. Get the weather from the response
+    3. Respond the weather
 
     Respond with a JSON containing:
-    - address
     - cep
-    - city
     - weather_summary
-    - recommended_operator
   `,
   tools: {
-    cepFromAddressTool,
-    cityFromCepTool,
+    getAddressFromCepTool,
+    getCityInformationTool,
     weatherFromCityTool
   }
+  // workflows: {
+  //     wheaterWorkflow
+  // }
 });
 
 "use strict";
@@ -123,7 +155,7 @@ const mastra = new Mastra({
         } = await c.req.json();
         const agent = mastra.getAgentById(agentId || "operatorAgent");
         const modelMessages = convertToModelMessages(message);
-        const stream = await agent.streamVNext(modelMessages, {
+        const stream = await agent.streamVNext(modelMessages[0], {
           format: "aisdk",
           threadId: threadIdParam
         });

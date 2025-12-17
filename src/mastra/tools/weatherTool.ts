@@ -3,23 +3,26 @@ import axios from "axios";
 import z from "zod";
 
 export async function getWeatherFromCity(city: string) {
-  const cleanCity = city.replace(/\s+/g, "");
-  const url = `https://brasilapi.com.br/api/cptec/v1/clima/previsao/${cleanCity}`;
+  const url = `https://brasilapi.com.br/api/cptec/v1/clima/previsao/${encodeURIComponent(city)}`;
   const res = await axios.get(url);
   return res.data;
 }
 
-export const weatherFromCityTool = createTool({
+export const getWeatherFromCityCodeTool = createTool({
     id: 'get-weather-from-city',
-    description: 'Get the weather from a city',
+    description: 'Get the weather from a city code',
     inputSchema: z.object({
-        city: z.string().describe('The city to get the weather from')
+        cityCode: z.string()
     }),
     outputSchema: z.object({
-        weather: z.string().describe('The weather found for the city')
+        weather_summary: z.string().describe('The weather found for the city code')
     }),
     execute: async ({ context }) => {
-        const { city } = context;
-        return getWeatherFromCity(city);
+        const { cityCode } = context;
+        const response = await getWeatherFromCity(cityCode);
+
+        return {
+            weather_summary: response
+        };
     }
 })

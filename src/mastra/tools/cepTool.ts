@@ -2,22 +2,50 @@ import { createTool } from "@mastra/core";
 import axios from "axios";
 import z from "zod";
 
-export const getCepFromAddress = async (address: string) => {
-    const response = await axios.get(`https://viacep.com.br/ws/${encodeURIComponent(address)}/json/`);
+export const getAddressFromCep = async (cep: string) => {
+    const response = await axios.get(`https://viacep.com.br/ws/${encodeURIComponent(cep)}/json/`);
     return response.data;
 };
 
-export const cepFromAddressTool = createTool({
+export const getAddressFromCepTool = createTool({
     id: 'get-cep-from-address',
-    description: 'Get the CEP from an address',
+    description: 'Get the address from the CEP',
     inputSchema: z.object({
-        address: z.string().describe('The address to get the CEP from')
+        cep: z.string().describe('CEP to get the address from')
     }),
     outputSchema: z.object({
-        cep: z.string().describe('The CEP found for the address')
+        cep: z.string(),
+        logradouro: z.string(),
+        complemento: z.string(),
+        unidade: z.string(),
+        bairro: z.string(),
+        localidade: z.string(),
+        uf: z.string(),
+        estado: z.string(),
+        regiao: z.string(),
+        ibge: z.string(),
+        gia: z.string(),
+        ddd: z.string(),
+        siafi: z.string()
     }),
     execute: async ({ context }) => {
-        const { address } = context;
-        return getCepFromAddress(address);
+        const { cep } = context;
+        const response = await getAddressFromCep(cep);
+
+        return {
+            cep: response.cep,
+            logradouro: response.logradouro,
+            complemento: response.complemento,
+            unidade: response.unidade,
+            bairro: response.bairro,
+            localidade: response.localidade,
+            uf: response.uf,
+            estado: response.estado,
+            regiao: response.regiao,
+            ibge: response.ibge,
+            gia: response.gia,
+            ddd: response.ddd,
+            siafi: response.siafi
+        };
     }
 })
